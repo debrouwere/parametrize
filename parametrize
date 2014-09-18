@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+
+import sys
+import re
+import collections
+import itertools
+
+def partition(l, predicate, n=-1):
+    """
+    Find the first element in a list matching a predicate and partition on it.
+    """
+
+    split = len(l)
+    partitions = [[]]
+    
+    for item in l:
+        if predicate(item) and n:
+            partitions.append([])
+            n = n - 1
+
+        partitions[-1].append(item)
+
+    return partitions
+
+def partition_on_common_arguments(l):
+    counts = collections.Counter(l)
+    repeats = lambda item: counts[item] > 1 and item.startswith('-')
+    return partition(l, repeats, n=1)
+
+def pad(l, n, value):
+    l = list(l)
+    while len(l) < n:
+        l.append(value)
+    return l
+
+# TODO: use `hrange` under the hood, so we can do more kinds of ranges
+def crange(description):
+    if ',' in description:
+        return description.split(',')
+    elif '..' in description:
+        params = description.split('..')
+        start, stop, step = map(int, pad(params, n=3, value=1))
+        return range(start, stop, step)
+    else:
+        raise ValueError()
+
+def expand(s):
+    """
+    Expand a string that contains ranges into its many expansions.
+
+    Input:
+
+        {2000..2003}-{01,12}-data.json
+
+    Output:
+
+        2000-01-data.json
+        2000-12-data.json
+        2001-01-data.json
+        2001-12-data.json
+        2002-01-data.json
+        2002-12-data.json
+
+    Use curly braces to signify ranges. Double dots indicate a true 
+    range whereas commas simply indicate a bunch of options.
+    """
+
+    matches = re.findall(r'(?=\{(.+?)\})', s)
+    options = map(crange, matches)
+    permutations = itertools.product(*options)
+    permutations = map(iter, permutations)
+    expansions = [re.sub(r'\{.+?\}', lambda m: str(next(permutation)), s) 
+        for permutation in permutations]
+
+    return expansions
+
+# split common arguments from those that we will parametrize
+command, flags = partition_on_common_arguments(sys.argv[1:])
+# split into different sets of parameters
+sets = partition(flags, lambda item: item == flags[0])[1:]
+ssets = map(" ".join, sets)
+
+# split out each parameter in each set
+# sets = [partition(pset, lambda item: item.startswith('-'))[1:] 
+#     for pset in sets]
+
+for args in ssets:
+    for expansion in expand(args):
+        print " ".join(command) + " " + expansion
+
+"""
+print command
+print flags
+print expand('hello-world.json')
+
+for expansion in expand('hello-{1,3}-{2014..2017}.json'):
+    print expansion
+"""
